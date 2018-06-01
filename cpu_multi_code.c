@@ -10,7 +10,143 @@ char returnSignal = 0;
 
 //variavel pra testes
 char pausa;
-void funcaoProximoEstadoExplicita(){};
+
+void funcaoProximoEstadoExplicita(int opcode, int currentState, int *controlSignal, int *nextState, int *c){
+	int OP1=0, OP0=0, OP2=0, OP3=0, OP4=0, OP5=0;
+	int N0,N1,N2,N3,N4,S3,S2,S1,S0;
+	int  var, v = *c;
+	// variavel auxiliar recebe estado atual
+	var = *nextState;
+
+	takeNbits(opcode, IR26, OneBit, &OP0); //op0 = opcode[0] printf("op0: %d\n",op0);
+	takeNbits(opcode, IR27, OneBit, &OP1); //op1 = opcode[1] printf("op1: %d\n",op1);
+	takeNbits(opcode, IR28, OneBit, &OP2); //op2 = opcode[2] printf("op2: %d\n",op2);
+	takeNbits(opcode, IR29, OneBit, &OP3); //op3 = opcode[3] printf("op3: %d\n",op3);
+	takeNbits(opcode, IR30, OneBit, &OP4); //op4 = opcode[4] printf("op4: %d\n",op4);
+	takeNbits(opcode, IR31, OneBit, &OP5); //op0 = opcode[5] printf("op5: %d\n",op5);
+
+	takeNbits(currentState, 0, 1, &S0);
+	takeNbits(currentState, 1, 1, &S1);
+	takeNbits(currentState, 2, 1, &S2);
+	takeNbits(currentState, 3, 1, &S3);
+	//next
+	takeNbits(currentState, 0, 1, &N0);
+	takeNbits(currentState, 1, 1, &N1);
+	takeNbits(currentState, 2, 1, &N2);
+	takeNbits(currentState, 3, 1, &N3);
+
+	printf("CICLO : %d\n", v );
+	printf("ESTADO binario: %d %d %d %d ",S3, S2, S1, S0 );
+	N1 = N1 << 1;
+	N2 = N2 << 2;
+	N3 = N3 << 3;
+	v = N0 | N1 | N2 | N3;
+	v = currentState & 0x0F;
+	printf("  Decimal: %d\n",v );
+	printf("OPCODE: %d %d %d %d %d %d\n",OP5,OP4, OP3, OP2, OP1, OP0 );
+	v = *c;
+	*c += 1;
+	/*SWITCH CASE COM OS SINAIS DE CADA ESTADO*/
+	switch (currentState) {
+		case 0 :
+			*controlSignal = 0x12810;//FETCH
+			var = 0x12810;//FETCH
+		break;
+		case 1 :
+			*controlSignal = 0x30;	//DECODE
+			//var = 
+		break;
+		case 2 :
+			*controlSignal = 0x28;//TIPO-I
+		break;
+		case 3 :
+			*controlSignal = 0x3000;//LW
+		break;
+		case 4 :
+			*controlSignal = 0x20004;//WB-LW
+		break;
+		case 5 :
+			*controlSignal = 0x5000;//SW
+		break;
+		case 6 :
+			*controlSignal = 0x48;	//R
+		break;
+		case 7 :
+			*controlSignal = 0x05;	//R-COMPLETE
+		break;
+		case 8 :
+			*controlSignal = 0x548;	//BEQ
+		break;
+		case 9 :
+			*controlSignal = 0xA00;	//JUMP
+		break;
+		case 10 :
+			*controlSignal = 0x8548;//BNE
+		break;
+		case 11 :
+			*controlSignal = 0x04;	//ADDI
+		break;
+		case 12 :
+			*controlSignal = 0x40206;//JAL
+		break;
+		case 13 :
+			*controlSignal = 0x04;	//ANDI
+		break;
+		case 14 :	
+			*controlSignal = 0xB00;	//JR
+		break;
+		case 15 :
+			*controlSignal = 0x40B04; //JALR
+		break;
+	}
+	// lower bit
+	N0 = not(S0) * not(S1) & not(S2) & not(S3) | 
+			not(S3) & not(S2) & not(S0) & S1 & ( OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 |
+			OP5 & OP3 & OP1 & OP0 & not(OP4) & not(OP2) | 
+			not(OP5) & not(OP4) & not(OP1) & not(OP2) & not(OP0) & OP3 | not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) ) |
+			not(S3) & not(S2) & not(S1) & S0 & not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP0) & OP1 |
+			not(S3) & S2 & S1 & not(S0)
+	;
+	
+	N1 = not(S3) & not(S2) & not(S1) & S0 & 
+			( not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
+			not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & OP0 | OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 |
+			OP5 & not(OP4) & OP3 & not(OP2) & OP1 & OP0 ) | 
+			not(S3) & not(S2) & S1 & not(S0) & ( OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 | not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) ) |
+			not(S3) & S2 & S1 & not(S0)
+	;
+
+	N2 = not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
+		not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | not(S3) & not(S2) & S1 & not(S0) &
+		( OP5 & not(OP4) & OP3 & not(OP2) & OP1 & OP0 |  not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0)) |
+		not(S3) & not(S2) & S1 & S0 | not(S3) & S2 & S1 & not(S0)
+	;
+	//High bit
+	N3 = not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & not(OP0) |
+		not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & OP0 | not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & not(OP0) | 
+		not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | 
+		not(S3) & not(S2) & S1 & not(S0) & ( not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) |
+		not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) |
+		not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 )
+	;
+
+	var = *controlSignal;
+	printf("SINAL CONTROLE : %d\n", var);
+	printf("prox  : %d %d %d %d\n",N3, N2, N1, N0 );
+	
+	N1 = N1 << 1;
+	N2 = N2 << 2;
+	N3 = N3 << 3;
+	currentState = N0 | N1 | N2 | N3;
+	currentState = currentState & 0xF;
+	*nextState = currentState;
+	printf("PROXIMO estado N : %d\n",currentState);	
+	printf("\n");
+	//funcaoProximoEstadoExplicita(0x8c480000, currentState, controlSignal, nextState, c);
+	
+}
+
+
 void UnidadeControle(int IR, int *sc){
 	//comeca com -1 = 111111
 	int opcode = IR >> 26; 
