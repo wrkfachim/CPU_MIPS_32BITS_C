@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -32,14 +31,14 @@ char pausa;
 
 
 void takeNbits(int var,int idx_start_bit, int n_bits ,int *result){
-/******I've weed + I've Cooffe = I've Great IDEIA!"*/
+/******I've w@@d + I've Cooffe = I've Great IDEIA!"*/
 	int cmpbit = 0, aux=0;
 	double r=0.00;		
 	if (n_bits >= 1 && n_bits < 32){
 		r = pow((double) 2, (double) n_bits) -1;			
 		cmpbit = (int)r;
 	}else {
-		printf("quantidade eerrada de bits\n");
+		printf("Too many bits\n");
 	}
 	aux = var >> idx_start_bit;
 	*result = aux & cmpbit;
@@ -47,7 +46,6 @@ void takeNbits(int var,int idx_start_bit, int n_bits ,int *result){
 
 void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow)
 {
-	printf("ULA A=%d  B=%d OP=%d\n", a, b, ula_op);
 	*overflow = 0;
 	switch (ula_op)
 		{
@@ -86,45 +84,125 @@ void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow
 		return;
 }
 
-
-void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, int *nextState){
-	int OP1=0, OP0=0, OP2=0, OP3=0, OP4=0, OP5=0;
-	int N0,N1,N2,N3,N4,S3,S2,S1,S0;
-	int  var, v;
-	// variavel auxiliar recebe estado atual
-	var = *nextState;
-
-	takeNbits(IR, IR26, OneBit, &OP0); //op0 = opcode[0] printf("op0: %d\n",op0);
-	takeNbits(IR, IR27, OneBit, &OP1); //op1 = opcode[1] printf("op1: %d\n",op1);
-	takeNbits(IR, IR28, OneBit, &OP2); //op2 = opcode[2] printf("op2: %d\n",op2);
-	takeNbits(IR, IR29, OneBit, &OP3); //op3 = opcode[3] printf("op3: %d\n",op3);
-	takeNbits(IR, IR30, OneBit, &OP4); //op4 = opcode[4] printf("op4: %d\n",op4);
-	takeNbits(IR, IR31, OneBit, &OP5); //op0 = opcode[5] printf("op5: %d\n",op5);
-
+void signalsLogicEQ(int currentState,int *result){
+	int RegDst0=0;		// 0
+	int RegDst1=0;		// 1
+	int RegWrite=0;		// 2
+	int ALUSrcA=0;		// 3
+	int ALUSrcB0=0;		// 4
+	int ALUSrcB1=0;		// 5
+	int ALUOp0=0;		// 6
+	int ALUOp1=0;		// 7
+	int PCSrc0=0;		// 8
+	int PCSrc1=0;		// 9
+	int PCWriteCond=0;	//10
+	int PCWrite=0;		//11
+	int IorD=0;			//12
+	int MemRead=0;		//13
+	int MemWrite=0;		//14
+	int BNE=0;			//15
+	int IRWrite=0;		//16
+	int MemtoReg0=0;	//17
+	int MemtoReg1=0;	//18
+	int S3=0,S2=0,S1=0,S0=0;
+	// pega o estado atual
 	takeNbits(currentState, 0, 1, &S0);
 	takeNbits(currentState, 1, 1, &S1);
 	takeNbits(currentState, 2, 1, &S2);
 	takeNbits(currentState, 3, 1, &S3);
-	//next
-	takeNbits(currentState, 0, 1, &N0);
-	takeNbits(currentState, 1, 1, &N1);
-	takeNbits(currentState, 2, 1, &N2);
-	takeNbits(currentState, 3, 1, &N3);
-	var= OP5<<5 | OP4<<4 | OP3<<3 |OP2<<2 | OP1<<1 | OP0<<0 ;
-	N1 = N1 << 1;
-	N2 = N2 << 2;
-	N3 = N3 << 3;
-	v = N0 | N1 | N2 | N3;
-	v = currentState & 0x0F;
-	printf("-----------------------------------------------------------------ESTADO: %d\n",v );
-	printf("ESTADO binario: %d %d %d %d ",S3, S2, S1, S0 );
-	printf("OPCODE: %d %d %d %d %d %d =>",OP5,OP4, OP3, OP2, OP1, OP0 );
-	printf(" Decimal: %d \n",var);
+	// estado 7
+	RegDst0= not(S3)& S2 & S1 & S0 
+	;
+	//estado 12
+	RegDst1= S3 & S2 &not(S1)&not(S0)
+	;
+	// 4+7+12+14
+	RegWrite= not(S3)& S2 &not(S1)&not(S0) | not(S3)& S2 & S1 & S0 | S3 & S2 &not(S1)&not(S0)
+	| S3 & S2 & S1 &not(S0)
+	;
+	// 2+6+8+10
+	ALUSrcA= not(S3)&not(S2)& S1 &not(S0) | not(S3)& S2 & S1 &not(S0) | S3 &not(S2)&not(S1)&not(S0)
+	| S3 &not(S2)& S1 &not(S0)
+	;		
+	// 0+1
+	ALUSrcB0= not(S3)&not(S2)&not(S1)&not(S0) | not(S3)&not(S2)&not(S1)& S0
+	;		
+	// 1+2
+	ALUSrcB1=not(S3)&not(S2)&not(S1)& S0 | not(S3)&not(S2)& S1 &not(S0)
+	;		
+	// 6+8+10
+	ALUOp0= not(S3)& S2 & S1 &not(S0) | S3 &not(S2)&not(S1)&not(S0)
+	| S3 &not(S2)& S1 &not(S0);		
+	// 6
+	ALUOp1=0;
+	//8+10+13+14
+	PCSrc0= S3 &not(S2)&not(S1)&not(S0) | S3 &not(S2)& S1 &not(S0) | S3 & S2 &not(S1)& S0 | S3 & S2 & S1 &not(S0)
+	;		
+	// 9+13+14
+	PCSrc1= S3 &not(S2)&not(S1)& S0 | S3 & S2 &not(S1)& S0 | S3 & S2 & S1 &not(S0)
+	;
+	// 8+10
+	PCWriteCond= S3 &not(S2)&not(S1)&not(S0) | S3 &not(S2)& S1 &not(S0)
+	;	
+	// 0+9+12+13+14
+	PCWrite= not(S3)&not(S2)&not(S1)&not(S0) | S3 &not(S2)&not(S1)& S0 | S3 & S2 &not(S1)&not(S0) |S3 & S2 &not(S1)& S0 | S3 & S2 & S1 &not(S0)
+	;		
+	// 3+5
+	IorD= not(S3)&not(S2)& S1 & S0 | not(S3)& S2 &not(S1)& S0
+	;			
+	// estado 0
+	MemRead= not(S3)&not(S2)&not(S1)&not(S0)
+	;
+	// estado 5
+	MemWrite= not(S3)& S2 &not(S1)& S0;		
+	// estado 10
+	BNE= S3 &not(S2)& S1 &not(S0)
+	;			
+	//  estado 0
+	IRWrite= not(S3)&not(S2)&not(S1)&not(S0)
+	;		
+	// estado 8
+	MemtoReg0= not(S3)& S2 &not(S1)&not(S0);
+	// estado 12
+	MemtoReg1= S3 & S2 &not(S1)&not(S0);
 
+	RegDst0=  RegDst0 << 0;	
+	RegDst1=  RegDst1 << 1;	
+	RegWrite= RegWrite<< 2;	
+	ALUSrcA=  ALUSrcA << 3;	
+
+	ALUSrcB0= ALUSrcB0 << 4;		
+	ALUSrcB1= ALUSrcB1 << 5;		
+	ALUOp0  = ALUOp0   << 6;		
+	ALUOp1  = ALUOp1   << 7;		
+
+	PCSrc0      = PCSrc0     << 8;	
+	PCSrc1      = PCSrc1     << 9;	
+	PCWriteCond = PCWriteCond<< 10;
+	PCWrite     = PCWrite    << 11;		
+	
+	IorD    = IorD    <<12;			
+	MemRead = MemRead <<13;		
+	MemWrite= MemWrite<<14;		
+	BNE     = BNE     <<15;			
+	
+	IRWrite   = IRWrite  <<16;		
+	MemtoReg0 = MemtoReg0<<17;	
+	MemtoReg1 = MemtoReg1<<18;	
+
+	*result = MemtoReg0 | MemtoReg1 | IRWrite | BNE |
+		MemWrite | MemRead | IorD | PCWrite | PCWriteCond | PCSrc1 | PCSrc0|
+		ALUOp1 | ALUOp0 | ALUSrcB1 | ALUSrcB0 | ALUSrcA | RegWrite | RegDst1 | RegDst0;  
+	//*result = *result & 0x7FFF;
+}
+
+void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, int *nextState){
+	int OP1=0, OP0=0, OP2=0, OP3=0, OP4=0, OP5=0;
+	int N0,N1,N2,N3,N4,S3=0,S2=0,S1=0,S0=0;
+	// variavel auxiliar recebe estado atual
 	switch (currentState) {
 		case 0 :
 			*controlSignal = 0x12810;//FETCH
-			var = 0x12810;//FETCH
 		break;
 		case 1 :
 			*controlSignal = 0x30;	//DECODE
@@ -158,7 +236,7 @@ void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, 
 			*controlSignal = 0x8548;//BNE
 		break;
 		case 11 :
-			*controlSignal = 0x04;	//ADDI // ANDI
+			*controlSignal = 0x04;	//ADDI + ANDI
 		break;
 		case 12 :
 			*controlSignal = 0x40206;//JAL
@@ -170,7 +248,20 @@ void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, 
 			*controlSignal = 0x0B04; //JALR
 		break;
 	}
+	/*Paser bit opcode to calcculate next state*/
+	takeNbits(IR, IR26, OneBit, &OP0); //op0 = opcode[0] printf("op0: %d\n",op0);
+	takeNbits(IR, IR27, OneBit, &OP1); //op1 = opcode[1] printf("op1: %d\n",op1);
+	takeNbits(IR, IR28, OneBit, &OP2); //op2 = opcode[2] printf("op2: %d\n",op2);
+	takeNbits(IR, IR29, OneBit, &OP3); //op3 = opcode[3] printf("op3: %d\n",op3);
+	takeNbits(IR, IR30, OneBit, &OP4); //op4 = opcode[4] printf("op4: %d\n",op4);
+	takeNbits(IR, IR31, OneBit, &OP5); //op0 = opcode[5] printf("op5: %d\n",op5);
+	/*Paser bit Current State to calcculate next state*/
+	takeNbits(currentState, 0, 1, &S0);//S0 = State[0]
+	takeNbits(currentState, 1, 1, &S1);//S1 = State[1]
+	takeNbits(currentState, 2, 1, &S2);//S2 = State[2]
+	takeNbits(currentState, 3, 1, &S3);//S3 = State[3]
 	/*EQUACOES LOGICAS PARA O CALCULO DO VALOR DE CADA BIT PARA O PROXIMO ESTADO!*/
+	//signalsLogicEQ( currentState, controlSignal);
 	// lower bit
 	N0 = not(S0) * not(S1) & not(S2) & not(S3) | 
 		not(S3) & not(S2) &  S1 & not(S0) & 
@@ -180,7 +271,6 @@ void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, 
 		not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP0) & OP1 ) |
 		not(S3) & S2 & S1 & not(S0)
 	;
-	
 	N1 = not(S3) & not(S2) & not(S1) & S0 & 
 			(not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) | not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 | not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) |
 				not(OP5) & not(OP4) & OP3 & OP2 & not(OP1) & not(OP0)| not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
@@ -191,7 +281,6 @@ void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, 
 				OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 | not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) ) |
 			not(S3) & S2 & S1 & not(S0)
 	;
-
 	N2 = not(S3) & not(S2) & not(S1) & S0 & 
 		( 	not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
 			not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | 
@@ -209,27 +298,17 @@ void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, 
 			not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) |
 			not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 )
 	;
-
-	var = *controlSignal;
-	printf("SINAL CONTROLE : %d\n", var);
-	
+	/*Concatenate bits to form next state*/
 	N1 = N1 << 1;
 	N2 = N2 << 2;
 	N3 = N3 << 3;
 	currentState = N0 | N1 | N2 | N3;
 	currentState = currentState & 0xF;
 	*nextState = currentState;
-	printf("\n");
-	//funcaoProximoEstadoExplicita(0x8c480000, currentState, controlSignal, nextState, c);
-	
 }
 
 void UnidadeControle(int IR, int *sc, int state, int *nextState){
-	//comeca com -1 = 111111
-	int opcode; 
-	takeNbits(IR, 26, 6, &opcode); //opcode = IR[31-26]
-	int currentState;
-	//void funcaoProximoEstadoExplicita(int opcode, int *controlSignal, int currentState, int *nextState)
+
 	funcaoProximoEstadoExplicita(IR, sc , state, nextState);
 
 }
@@ -252,6 +331,7 @@ void Busca_Instrucao(int sc, int PC, int ALUOUT, int IR, int A, int B, int *PCne
 		}
 		*MDRnew = *IRnew << 16;			//extende endereco
 		*MDRnew = *MDRnew >> 16;
+		
 		ula(PC, 0x4, 0x2, PCnew, &zero, &overflow);
 	}
 }
@@ -260,10 +340,10 @@ void Decodifica_BuscaRegistrador(int sc, int IR, int PC, int A, int B, int *Anew
 	int a,b;
 	char zero, overflow;
 	if(sc==0x30) {	//Se Estado1 (decode)
-		printf("DECODEEE\n");
-		if(IR == -1) {
+		if(IR == -1 || IR == 0) {
+			*Anew = PC-4;
+			ula(PC, 0, 0x02, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT = PC + DESVIO;
 			loop = 0;
-			printf("HALT!\n");
 			returnSignal = 1;
 			return;
 		}
@@ -274,15 +354,12 @@ void Decodifica_BuscaRegistrador(int sc, int IR, int PC, int A, int B, int *Anew
 			*Bnew = b;
 			IR = IR << 16;
 			IR = IR >> 14;
-			//06- UALOp0 (ALUOp0) 
-			//07- UALOp1 (ALUOp1) 
 			ula(PC, IR, 0x02, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT = PC + DESVIO;
 		}
 	}
 }
 
-void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT, 
-														int *ALUOUTnew, int *PCnew){
+void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT, int *ALUOUTnew, int *PCnew){
 
 	char zero, overflow, ulaop;
 	int op, function, aluop=0;
@@ -302,8 +379,8 @@ void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT,
 		takeNbits(IR, 0, 6, &function);		/*6 bits campo funcao*/
 		switch(function) {
 			case 0x20:	//add
-				printf("A=== %d B=== %d\n",A, B );
-				printf("REG[A]=== %d REG[B]=== %d\n",reg[A], reg[B]);
+				//printf("A=== %d B=== %d\n",A, B );
+				//printf("REG[A]=== %d REG[B]=== %d\n",reg[A], reg[B]);
 				ula(reg[A], reg[B], 0x2, ALUOUTnew, &zero, &overflow);
 				break;
 
@@ -331,35 +408,36 @@ void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT,
 
 		switch(function) {
 			case 0x08:	//addI
-					printf("ADDI IMEDIATO = %d ALUSrcA = %d \n", adress, A);
+					//printf("ADDI IMEDIATO = %d ALUSrcA = %d \n", adress, A);
 				ula(reg[A], adress, 0x02, ALUOUTnew, &zero, &overflow);
 				break;
 
 			case 0x0C:	//andi
-					printf("ANDI IMEDIATO = %d ALUSrcA = %d \n", adress, A );
+					//printf("ANDI IMEDIATO = %d ALUSrcA = %d \n", adress, A );
 				ula(reg[A], adress, 0x00, ALUOUTnew, &zero, &overflow);
 				break;
 
 			case 0x14: //jr Pelanza-JR jr rs
+				*ALUOUTnew = PC;
 				*PCnew = reg[A];
 				break;
 
 			case 0x15:	//jalr rs, rt => $ra = pc and goto rs;
 				// passar reg
 				//reg[B] = PC;
-				printf("*********Goto JALR = %d e REG: %d o PC= %d\n",reg[A]*4,B, PC);
+				//printf("*********Goto JALR = %d e REG: %d o PC= %d\n",reg[A]*4,B, PC);
 				// RS = PC;
 				*ALUOUTnew = PC;
 				*PCnew = reg[A];
 				break;
 
 			case 0x23:	//LW
-				printf("LOADWORD A:%d Reg[A]: %d e Imediato: %d\n", A, reg[A], adress);
+				//printf("LOADWORD A:%d Reg[A]: %d e Imediato: %d\n", A, reg[A], adress);
 				ula(reg[A], adress, 0x02, ALUOUTnew, &zero, &overflow);
 				break;
 
 			case 0x2b:	//sw
-				printf("STOREWORD A:%d Reg[A]: %d e Imediato: %d\n", A, reg[A], adress);
+			//	printf("STOREWORD A:%d Reg[A]: %d e Imediato: %d\n", A, reg[A], adress);
 				ula(reg[A], adress, 0x02, ALUOUTnew, &zero, &overflow);
 				break;
 		}
@@ -388,8 +466,8 @@ void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT,
 	else if(sc == 0x40206) {		/* Pelanza-JAL imediatte AluOp=00*/
 		adress = IR&0x3ffffff;	//realiza a extensão de sinal
 		adress = adress << 2; 	// 30 bits
-		printf("ADRESS calculado %d\n",adress );
-		printf("*********Goto JAL = %d e REG: 31 = (PC = %d)\n",adress, PC);
+		//printf("ADRESS calculado %d\n",adress );
+		//printf("*********Goto JAL = %d e REG: 31 = (PC = %d)\n",adress, PC);
 		*PCnew = adress;
 	}	
 }
@@ -410,13 +488,13 @@ void EscreveTipoR_AcessaMemoria(int sc, int B, int IR, int ALUOUT, int PC, int *
 			//reg[B] = ALUOUT;
 			reg[B] = ALUOUT;
 		}
-		printf("\t\tresultado da ula: %d\n", ALUOUT);
+		//printf("\t\tresultado da ula: %d\n", ALUOUT);
 	}
 	else if(sc == 0x30000) {	//se LW
 		(*MDRnew) = (memoria[ALUOUT/4]) << 16;	//LW
 		(*MDRnew) = (*MDRnew) >> 16;	//LW
-		printf("----------ALUOUT: %d\n", ALUOUT);
-		printf("MDRnew: %d\n", *MDRnew);
+		//printf("----------ALUOUT: %d\n", ALUOUT);
+		//printf("MDRnew: %d\n", *MDRnew);
 	}
 	else if(sc == 0x5000) {	        //estado 5 se SW
 		memoria[ALUOUT] = reg[B];	//SW
@@ -429,7 +507,7 @@ void EscreveRefMem(int sc, int PC, int IR, int MDR, int ALUOUT){
 	}
 	int RT,RD, RegWrite=0, RegDest=00, MemtoReg=00;  		        
 	takeNbits( sc, 2, 1, &RegWrite); 		// 02-EscReg (RegWrite) = 1 bit
-	printf("RegWrite => %d\n", RegWrite);
+	//printf("RegWrite => %d\n", RegWrite);
 	if(RegWrite) { 							/*estados 4,7,11,12,14 */  
 		takeNbits( sc, 0, 2, &RegDest);		/* 00-(RegDst0) : 01-(RegDst1) = 2 bits*/
 		takeNbits( sc,17, 2, &MemtoReg);		/* 00-(MemtoReg0) : 01-(MemtoReg1) = 2 bits*/
@@ -437,11 +515,11 @@ void EscreveRefMem(int sc, int PC, int IR, int MDR, int ALUOUT){
 			case 00:
 				takeNbits( IR, 16, 5,&RT); 	// RT <= IR[16...20]; B
 				
-				printf("00 RegDst: RT = %d MDR: %d\n",RT, MDR);
-				printf("MemtoReg = %d\n", MemtoReg);
+				//printf("00 RegDst: RT = %d MDR: %d\n",RT, MDR);
+				//printf("MemtoReg = %d\n", MemtoReg);
 				
 				if (MemtoReg == 00) {		//RT = ALUOUT
-					printf("00 RegDst: RT = %d ALUOUT: %d\n",RT, ALUOUT);
+					//printf("00 RegDst: RT = %d ALUOUT: %d\n",RT, ALUOUT);
 					reg[RT] = ALUOUT;
 				}else if (MemtoReg == 01){	//RT = MDR
 					reg[RT] = MDR/4;
@@ -452,10 +530,10 @@ void EscreveRefMem(int sc, int PC, int IR, int MDR, int ALUOUT){
 
 			case 01:
 				takeNbits( IR, 11, 5,&RD); 	// RD <= IR[11...15]; D
-				printf("01 RegDst RD = %d\n", RD);
+				//printf("01 RegDst RD = %d\n", RD);
 				//reg[RD] = MDR/4;
 				if (MemtoReg == 00) {		//RD = ALUOUT
-					printf("RD %d ALUOUT %d\n", RD, ALUOUT);
+					//printf("RD %d ALUOUT %d\n", RD, ALUOUT);
 					reg[RD] = ALUOUT;
 				}else if (MemtoReg == 01){	//RD = MDR
 					reg[RD] = MDR/4;
@@ -465,7 +543,7 @@ void EscreveRefMem(int sc, int PC, int IR, int MDR, int ALUOUT){
 			break;
 			
 			case 02:
-				printf("10 Regdst $RA = %d\n",$ra);
+				//printf("10 Regdst $RA = %d\n",$ra);
 				$ra = MDR/4;				   	//reg[31] = MDR; RA
 				if (MemtoReg == 00) {		//RT = ALUOUT
 					$ra = ALUOUT;
@@ -506,7 +584,7 @@ int main (int argc, char *argv[])
 					//                    sao usados apenas os 4 bits menos significativos dos 8 disponiveis.
 
 	int nr_ciclos = 0; 			// contador do numero de ciclos executados
-
+	char x;
 /*
 As variaveis zero e overflow nao precisam definidas na main.
 Serao argumentos de retorno da ula e devem ser definidas localmente nas
@@ -538,16 +616,7 @@ char  zero, overflow;  			// Sinais de Controle de saida da UL: bit zero e bit p
 	memoria[84]= 538443780 ; // 	addi $t8, $zero, 4		#84-21 recupera endereco de executa (#04)
 	memoria[88]= 1461649408; //		jalr $t8,$ra			#88-22 desvia fluxo para funcao executa
 	memoria[92]= 4294967295; // 	###### FIM da execução
-	memoria[96] = -1;
-	/*
-	memoria[0]= 538443876 ; // 	addi $t8, $zero, 100	#56-14 carrega endereco para salvar na memoria
-	memoria[0]= 1407188992; //  	naopula: jr $ra    		#68-17 fim de executa. Volta para a main.
-	memoria[4]= 2936668160; //  	sw $t2, 0($t8) 			#60-15 salva $t2 (tem vlr 2) na memoria
-	memoria[8]= 2400321536; //  	lw $s2, 0($t8) 			#64-16 recupera vlr 2 para s2
-	memoria[12] = 0xac480000;  // 1010 1100 0100 1000 0000 0000 0000 0000  sw $t0, 0($v0)	
-	memoria[72]= 813957120 ; // 	main: andi $a0, $a0, 0	#72-18 $a0 tem todos os bits como 0
-	*/
-	
+
 	reg[4]  = 0;   // $a0
 	reg[5]  = -1;  // $a1
 	reg[6]  = 0;   // $a2
@@ -569,21 +638,13 @@ char  zero, overflow;  			// Sinais de Controle de saida da UL: bit zero e bit p
 		// contador que determina quantos ciclos foram executados
 		nr_ciclos++;
 		// atualizando os registradores temporarios necessarios ao proximo ciclo.
-		
-		printf("PC=%d   IR=%d   MDR=%d\n",PC,IR,MDR);
-		printf("A=%d   B=%d   ALUOUT=%d\n",A,B,ALUOUT);
-		printf("CONTROLE=%d\n",sc);
-
 		PC	 	= PCnew;
 		IR		= IRnew;
-		MDR		= (MDRnew*4);
+		MDR		= (MDRnew);
 		A		= Anew;
 		B		= Bnew;
 		ALUOUT 	= ALUOUTnew;
 		state   = nextState;
-
-		printf("NESXT============================================================\n");
-		scanf("%c",&l);
 		// aqui termina um ciclo
 	} // fim do while(loop)
 
@@ -593,15 +654,16 @@ char  zero, overflow;  			// Sinais de Controle de saida da UL: bit zero e bit p
 		printf("PC=%d   IR=%d   MDR=%d\n",PC,IR,MDR);
 		printf("A=%d   B=%d   ALUOUT=%d\n",A,B,ALUOUT);
 		printf("CONTROLE=%d\n",sc);
+
 		printf("BANCO REGISTRADORES\n");
 		for ( ii = 0; ii < NUMREG; ii++)
 		{
 			printf("R%d=%d\t", ii,reg[ii]);
 			if ((ii % 8) == 0)printf("\n");
 		}
-		printf("\n\nMEMORIA\\n");
+		printf("\n\nMEMORIA\n\n");
 		for (ii = 0; ii < 124 ; ii+=4) {
-			printf("memoria[%d]=%d   ", ii, memoria[ii]);
+			printf("Memoria[%d]=%d   ", ii, memoria[ii]);
 			if ((ii % 5) == 0)printf("\t\n");
 		}
 		printf("Nr de ciclos executados =%d \n", nr_ciclos);
