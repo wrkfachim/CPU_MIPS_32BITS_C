@@ -1,406 +1,371 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
+//#include <math.h>
 
-extern int memoria[];
-extern int reg[];
-extern char loop;
-extern void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow);
+#define FALSE 0
+#define TRUE  1
+//capacidade memoria em Bytes 
+#define MAX 1024
+//total de rgistradores
+#define NUMREG 32
+// registrador 31 $ra 
+#define $ra reg[31]
+// instrucao tipo R
+#define R_TYPE 32
+//macro para negar o valor do bit
+#define not(b) ((b) == (1) ? (0) : (1) )
+//macro para acessar as posicoes do opcode no reg de Instrucoes
+#define IR26 26
+#define IR27 27
+#define IR28 28
+#define IR29 29
+#define IR30 30
+#define IR31 31
+//acessar apenas um bit
+#define OneBit 1
+#define DECODE 1
+#define SIGNALCONTROL 19
+#define CURRENTSTATE  4
 
+int memoria[MAX];		// Memoria RAM
+int reg[NUMREG];		// Banco de Registradores
+
+char loop = 1; 		// variavel auxiliar que determina a parada da execucao deste programa
 char returnSignal = 0;
 
 //variavel pra testes
 char pausa;
 
-void funcaoProximoEstadoExplicita(int opcode, int currentState, int *controlSignal, int *nextState, int *c){
-	int OP1=0, OP0=0, OP2=0, OP3=0, OP4=0, OP5=0;
-	int N0,N1,N2,N3,N4,S3,S2,S1,S0;
-	int  var, v = *c;
-	// variavel auxiliar recebe estado atual
-	var = *nextState;
 
-	takeNbits(opcode, IR26, OneBit, &OP0); //op0 = opcode[0] printf("op0: %d\n",op0);
-	takeNbits(opcode, IR27, OneBit, &OP1); //op1 = opcode[1] printf("op1: %d\n",op1);
-	takeNbits(opcode, IR28, OneBit, &OP2); //op2 = opcode[2] printf("op2: %d\n",op2);
-	takeNbits(opcode, IR29, OneBit, &OP3); //op3 = opcode[3] printf("op3: %d\n",op3);
-	takeNbits(opcode, IR30, OneBit, &OP4); //op4 = opcode[4] printf("op4: %d\n",op4);
-	takeNbits(opcode, IR31, OneBit, &OP5); //op0 = opcode[5] printf("op5: %d\n",op5);
 
+
+void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow)
+{
+	*overflow = 0;
+	switch (ula_op)
+		{
+      case 0:    // and
+				*result_ula = a & b;
+				break;
+
+      case 1:   // or
+				*result_ula = a | b;
+				break;
+
+		case 2:  // add
+			*result_ula = a + b;
+			if ( (a >= 0 && b >= 0 && *result_ula < 0) || (a < 0 && b < 0 && *result_ula >= 0) )
+				*overflow  = 1;
+			break;
+
+      case 6:   // sub
+				*result_ula = a - b;
+				if ( (a >= 0 && b < 0 && *result_ula < 0) || (a < 0 && b >= 0 && *result_ula >= 0) )
+					*overflow  = 1;
+				break;
+
+      case 7:   // slt
+				if(a < b)
+					*result_ula = 1;
+				else
+					*result_ula = 0;
+				break;
+		}
+		if (*result_ula == 0)
+			*zero = 1;
+		else
+			*zero = 0;
+
+		return;
+}
+
+void takeNbits(int var,int idx_start_bit, int n_bits ,int *result){
+/******I've w@@d + I've Cooffe = I've Great IDEIA!"*/
+	int cmpbit = 0, aux=0, ii;
+	int r=1;		
+	if (n_bits >= 1 && n_bits < 32){
+		//r = pow((double) 2, (double) n_bits) -1;			
+		for (ii = 0; ii < n_bits; ii++)	r= r*2;
+		cmpbit = r-1;
+	}else {
+		printf("Too many bits\n");
+	}
+	aux = var >> idx_start_bit;
+	*result = aux & cmpbit;
+}
+void signalsLogicEQ(int currentState,int *result){
+	/*declarando os 19 sinais da Unidade de Controle*/
+	int RegDst0		=0;		// 0	Lower-Bit
+	int RegDst1   	=0;		// 1      
+	int RegWrite	=0;		// 2
+	int ALUSrcA		=0;		// 3
+
+	int ALUSrcB0	=0;		// 4
+	int ALUSrcB1	=0;		// 5
+	int ALUOp0		=0;		// 6
+	int ALUOp1		=0;		// 7
+
+	int PCSrc0		=0;		// 8
+	int PCSrc1		=0;		// 9
+	int PCWriteCond	=0;		//10
+	int PCWrite 	=0;		//11
+	
+	int IorD		=0;		//12
+	int MemRead		=0;		//13
+	int MemWrite 	=0;		//14
+	int BNE 		=0;		//15
+	
+	int IRWrite		=0;		//16
+	int MemtoReg0	=0;		//17
+	int MemtoReg1	=0;		//18	High-Bit
+	/*bits q representam o estado atual*/
+	int S3=0,S2=0,S1=0,S0=0;
+	//retira bit-a-bit que compoem o estado ATUAL 
 	takeNbits(currentState, 0, 1, &S0);
 	takeNbits(currentState, 1, 1, &S1);
 	takeNbits(currentState, 2, 1, &S2);
 	takeNbits(currentState, 3, 1, &S3);
-	//next
-	takeNbits(currentState, 0, 1, &N0);
-	takeNbits(currentState, 1, 1, &N1);
-	takeNbits(currentState, 2, 1, &N2);
-	takeNbits(currentState, 3, 1, &N3);
+	// estado 7
+	/*equacoesLogicas p/Cada sinal de Controle*/
+	RegDst0= (not(S3)& S2 & S1 & S0) 
+	;
+	//estado 12
+	RegDst1= (S3 & S2 & not(S1) & not(S0))
+	;
+	// 4+7+11+12+14	
+	RegWrite=  (( (((not(S3)&S2)&(not(S1)&not(S0)))|(((not(S3)&S2)&(S1&S0)))) | (((S3 & not(S2)) & (S1 & S0)) | ((S3&S2)&(not(S1)&not(S0))) ) )
+	| ((S3&S2)&(S1&not(S0))))
+	;
+	// 2+6+8+10
+	ALUSrcA= ((( (not(S3)&not(S2)) & (S1&not(S0)) ) | ((not(S3)&S2)&(S1&not(S0)))) | ( ((S3&not(S2)) & (not(S1)&not(S0)))
+	| ((S3&not(S2)) & (S1&not(S0))) ))
+	;		
+	// 0+1
+	ALUSrcB0= (((not(S3)&not(S2))&(not(S1)&not(S0))) | ((not(S3)&not(S2))&(not(S1)&S0)))
+	;		
+	// 1+2
+	ALUSrcB1= (((not(S3)&not(S2))&(not(S1)&S0)) | ((not(S3)&not(S2))&(S1&not(S0))))
+	;		
+	// 6+8+10
+	ALUOp0= ((((not(S3)&S2)&(S1&not(S0))) | ((S3&not(S2))&(not(S1)&not(S0))))
+	| ((S3&not(S2))&(S1&not(S0))))
+	;		
+	// 6
+	ALUOp1=0;
+	//8+10+13+14
+	PCSrc0= (((((S3&not(S2))&(not(S1)&not(S0)))|((S3&not(S2))&(S1&not(S0))))|((S3&S2)&(not(S1)&S0))) | ((S3&S2)&(S1&not(S0))))
+	;		
+	// 9+12+13+14
+	PCSrc1= (((((S3 &not(S2))&(not(S1)&S0)) | ((S3 & S2) &(not(S1)&not(S0)))) | ((S3 & S2) &(not(S1)& S0))) | ((S3 & S2) & (S1 &not(S0))))
+	;
+	// 8+10
+	PCWriteCond= (((S3&not(S2))&(not(S1)&not(S0))) | ((S3 &not(S2))& (S1 &not(S0))))
+	;	
+	// 0+9+12+13+14
+	PCWrite= (((( ((not(S3)&not(S2))&(not(S1)&not(S0))) | ((S3 &not(S2))&(not(S1)& S0))) | ((S3 & S2) &(not(S1)&not(S0)))) |((S3 & S2) &(not(S1)& S0))) | ((S3 & S2) & (S1 &not(S0))))
+	;		
+	// 3+5
+	IorD= (((not(S3))&(not(S2)& S1 & S0)) | ((not(S3)& S2) &(not(S1)& S0)))
+	;			
+	// estado 0+3
+	MemRead= (((not(S3)&not(S2))&(not(S1)&not(S0))) | ((not(S3)&not(S2))&(S1 & S0))) 
+	;
+	// estado 5
+	MemWrite= ((not(S3)& S2) &(not(S1)& S0));		
+	// estado 10
+	BNE= ((S3 &not(S2))& (S1 &not(S0)))
+	;			
+	//  estado 0
+	IRWrite= ((not(S3)&not(S2))&(not(S1)&not(S0)))
+	;		
+	// estado 8
+	MemtoReg0= ((not(S3)& S2) &(not(S1)&not(S0)));
+	// estado 12
+	MemtoReg1= ((S3 & S2) &(not(S1)&not(S0)));
 
-	printf("CICLO : %d\n", v );
-	printf("ESTADO binario: %d %d %d %d ",S3, S2, S1, S0 );
-	N1 = N1 << 1;
-	N2 = N2 << 2;
-	N3 = N3 << 3;
-	v = N0 | N1 | N2 | N3;
-	v = currentState & 0x0F;
-	printf("  Decimal: %d\n",v );
-	printf("OPCODE: %d %d %d %d %d %d\n",OP5,OP4, OP3, OP2, OP1, OP0 );
-	v = *c;
-	*c += 1;
-	/*SWITCH CASE COM OS SINAIS DE CADA ESTADO*/
-	switch (currentState) {
-		case 0 :
-			*controlSignal = 0x12810;//FETCH
-			var = 0x12810;//FETCH
-		break;
-		case 1 :
-			*controlSignal = 0x30;	//DECODE
-			//var = 
-		break;
-		case 2 :
-			*controlSignal = 0x28;//TIPO-I
-		break;
-		case 3 :
-			*controlSignal = 0x3000;//LW
-		break;
-		case 4 :
-			*controlSignal = 0x20004;//WB-LW
-		break;
-		case 5 :
-			*controlSignal = 0x5000;//SW
-		break;
-		case 6 :
-			*controlSignal = 0x48;	//R
-		break;
-		case 7 :
-			*controlSignal = 0x05;	//R-COMPLETE
-		break;
-		case 8 :
-			*controlSignal = 0x548;	//BEQ
-		break;
-		case 9 :
-			*controlSignal = 0xA00;	//JUMP
-		break;
-		case 10 :
-			*controlSignal = 0x8548;//BNE
-		break;
-		case 11 :
-			*controlSignal = 0x04;	//ADDI
-		break;
-		case 12 :
-			*controlSignal = 0x40206;//JAL
-		break;
-		case 13 :
-			*controlSignal = 0x04;	//ANDI
-		break;
-		case 14 :	
-			*controlSignal = 0xB00;	//JR
-		break;
-		case 15 :
-			*controlSignal = 0x40B04; //JALR
-		break;
-	}
-	// lower bit
+	RegDst0 =  RegDst0 		<< 0;	
+	RegDst1 =  RegDst1 		<< 1;	
+	RegWrite=  RegWrite		<< 2;	
+	ALUSrcA =  ALUSrcA 		<< 3;	
+
+	ALUSrcB0 = ALUSrcB0		<< 4;		
+	ALUSrcB1 = ALUSrcB1		<< 5;		
+	ALUOp0   = ALUOp0  		<< 6;		
+	ALUOp1   = ALUOp1  		<< 7;		
+
+	PCSrc0     = PCSrc0     << 8;	
+	PCSrc1     = PCSrc1     << 9;	
+	PCWriteCond= PCWriteCond<< 10;
+	PCWrite    = PCWrite    << 11;		
+	
+	IorD    = 	IorD    	<<12;			
+	MemRead = 	MemRead 	<<13;		
+	MemWrite= 	MemWrite	<<14;		
+	BNE     = 	BNE     	<<15;			
+	
+	IRWrite   = IRWrite  <<16;		
+	MemtoReg0 = MemtoReg0<<17;	
+	MemtoReg1 = MemtoReg1<<18;	
+	/*concatenando os resultados emuma variavel soah*/
+	*result = MemtoReg0 | MemtoReg1 | IRWrite | BNE |
+		MemWrite | MemRead | IorD | PCWrite | PCWriteCond | PCSrc1 | PCSrc0|
+		ALUOp1 | ALUOp0 | ALUSrcB1 | ALUSrcB0 | ALUSrcA | RegWrite | RegDst1 | RegDst0;  
+	//*result = *result & 0xFFFF;
+}
+
+void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, int *nextState){
+	//variaveis para operar bit-a-bit na equacao logica 
+	int OP1=0, OP0=0, OP2=0, OP3=0, OP4=0, OP5=0;
+	// bits resultado p/cade EqLogica q compoem o proximo estado
+	int N0,N1,N2,N3,N4,S3=0,S2=0,S1=0,S0=0;
+	// variavel auxiliar para receber os sinais de controle do respectivo estado
+	int sinal=0;
+	/*Paser bit opcode to calcculate next state*/
+	takeNbits(IR, IR26, OneBit, &OP0); //op0 = opcode[0] printf("op0: %d\n",op0);
+	takeNbits(IR, IR27, OneBit, &OP1); //op1 = opcode[1] printf("op1: %d\n",op1);
+	takeNbits(IR, IR28, OneBit, &OP2); //op2 = opcode[2] printf("op2: %d\n",op2);
+	takeNbits(IR, IR29, OneBit, &OP3); //op3 = opcode[3] printf("op3: %d\n",op3);
+	takeNbits(IR, IR30, OneBit, &OP4); //op4 = opcode[4] printf("op4: %d\n",op4);
+	takeNbits(IR, IR31, OneBit, &OP5); //op0 = opcode[5] printf("op5: %d\n",op5);
+	/*Paser bit Current State to calcculate next state*/
+	takeNbits(currentState, 0, 1, &S0);//S0 = State[0]
+	takeNbits(currentState, 1, 1, &S1);//S1 = State[1]
+	takeNbits(currentState, 2, 1, &S2);//S2 = State[2]
+	takeNbits(currentState, 3, 1, &S3);//S3 = State[3]
+	/*EQUACOES LOGICAS PARA O CALCULO DO VALOR DE CADA BIT PARA O PROXIMO ESTADO!*/
+	/*Funcao calcular os 19 sinais-de-controle do estado atual  */
+	signalsLogicEQ( currentState, &sinal);
+	//printf("%d\n",*controlSignal );
+	// lower bit =(
 	N0 = not(S0) * not(S1) & not(S2) & not(S3) | 
-			not(S3) & not(S2) & not(S0) & S1 & ( OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 |
+		not(S3) & not(S2) &  S1 & not(S0) & 
+			( OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 | not(OP5) & not(OP4) & OP3 & OP2 & not(OP1) & not(OP0) |
 			OP5 & OP3 & OP1 & OP0 & not(OP4) & not(OP2) | 
 			not(OP5) & not(OP4) & not(OP1) & not(OP2) & not(OP0) & OP3 | not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) ) |
-			not(S3) & not(S2) & not(S1) & S0 & not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP0) & OP1 |
+		not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP0) & OP1 ) |
+		not(S3) & S2 & S1 & not(S0)
+	;
+	N1 =(
+		((not(S3) & not(S2)) & (not(S1) & S0)) & 
+			(not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) | not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 | not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) |
+				not(OP5) & not(OP4) & OP3 & OP2 & not(OP1) & not(OP0)| not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
+				not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & OP0 | OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 |
+				OP5 & not(OP4) & OP3 & not(OP2) & OP1 & OP0 ) | 
+				not(S3) & not(S2) & S1 & not(S0) & ( not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 | 
+				not(OP5) & not(OP4) & OP3 & OP2 & not(OP1) & not(OP0) | 
+				OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 | not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) ) |
 			not(S3) & S2 & S1 & not(S0)
+		)
 	;
-	
-	N1 = not(S3) & not(S2) & not(S1) & S0 & 
-			( not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
-			not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & OP0 | OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 |
-			OP5 & not(OP4) & OP3 & not(OP2) & OP1 & OP0 ) | 
-			not(S3) & not(S2) & S1 & not(S0) & ( OP5 & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 | not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) ) |
-			not(S3) & S2 & S1 & not(S0)
+	N2 = (not(S3) & not(S2) & not(S1) & S0 & 
+		( 	not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
+			not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | 
+		not(S3) & not(S2) & S1 & not(S0) &
+			(not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 | OP5 & not(OP4) & OP3 & not(OP2) & OP1 & OP0 |  not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0)) |
+			not(S3) & not(S2) & S1 & S0 | not(S3) & S2 & S1 & not(S0)
+		)
 	;
-
-	N2 = not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & not(OP1) & not(OP0) |
-		not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | not(S3) & not(S2) & S1 & not(S0) &
-		( OP5 & not(OP4) & OP3 & not(OP2) & OP1 & OP0 |  not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0)) |
-		not(S3) & not(S2) & S1 & S0 | not(S3) & S2 & S1 & not(S0)
+	//High bit =O 
+	N3 =( not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & not(OP0) |
+			not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & OP0 | not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & not(OP0) | 
+			not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | 
+		not(S3) & not(S2) & S1 & not(S0) & 
+			( not(OP5) & not(OP4) & OP3 & OP2 & not(OP1) & not(OP0) |
+			not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) |
+			not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) |
+			not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 )
+		)
 	;
-	//High bit
-	N3 = not(S3) & not(S2) & not(S1) & S0 & ( not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & not(OP0) |
-		not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & OP0 | not(OP5) & not(OP4) & not(OP3) & OP2 & not(OP1) & not(OP0) | 
-		not(OP5) & not(OP4) & not(OP3) & not(OP2) & OP1 & OP0 ) | 
-		not(S3) & not(S2) & S1 & not(S0) & ( not(OP5) & not(OP4) & OP3 & not(OP2) & not(OP1) & not(OP0) |
-		not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & not(OP0) |
-		not(OP5) & OP4 & not(OP3) & OP2 & not(OP1) & OP0 )
-	;
-
-	var = *controlSignal;
-	printf("SINAL CONTROLE : %d\n", var);
-	printf("prox  : %d %d %d %d\n",N3, N2, N1, N0 );
-	
+	/*Concatenate bits to form next state*/
 	N1 = N1 << 1;
 	N2 = N2 << 2;
 	N3 = N3 << 3;
 	currentState = N0 | N1 | N2 | N3;
 	currentState = currentState & 0xF;
 	*nextState = currentState;
-	printf("PROXIMO estado N : %d\n",currentState);	
-	printf("\n");
-	//funcaoProximoEstadoExplicita(0x8c480000, currentState, controlSignal, nextState, c);
-	
+	*controlSignal = sinal;
 }
 
-
-void UnidadeControle(int IR, int *sc){
-	//comeca com -1 = 111111
-	int opcode = IR >> 26; 
-	unsigned char op1=0, op0=0, op2=0, op3=0, op4=0, op5=0;
-	unsigned char n0=0, n1=0, n2=0, n3=0, n4=0;
-
-	/*opcode & 0011 1111*/
-	opcode = opcode&0x3f; //filtrando para tratar negativo
-
-	switch(*sc) {
-		
-		case 0:				 //Inicializador
-			/*sc = 0x12020;	 Estado 0*/
-			*sc  = 0x12020;	 //Estado 0
-/* sao 20 sinais controle 
-  High 19-18--16---14-----98---765-----4----3 2 1------0 Lower	
-		0 1  00   01 00 0000   001     0    0 0 0      0
-		  IREsc	   LerMemoria    AluB1 AluB0    EscReg RegDst
-		*/
-		break;
-
-		case 0x12020:		 //Estado 0    
-			*sc = 0x30;		 //Estado 1  ... Estado0->Estado1
-		break;
-
-		case 0x30:			//Estado 1		
-		/*
-
-		(add, sub, slt, and, or, lw, sw, beq e j),jal, jr, jalr, addi, andi e bne.
-
-		00- RegDst0 (RegDst0) 
-		01- RegDst1 (RegDst1) 
-		02- EscReg (RegWrite)
-		03- UALFonteA (ALUSrcA) 
-		04- UALFonteB0 (ALUSrcB0) 
-		05- UALFonteB1 (ALUSrcB1)
-		06- UALOp0 (ALUOp0) 
-		07- UALOp1(ALUOp1) 
-		08- FontePC0 (PCSource0)
-		09- FontePC1 (PCSource1) 
-		10- PCEscCond (PCWriteCond) 
-		11- PCEsc (PCWrite)
-		12- IouD (IorD) 
-		13- LerMem (MemRead) 
-		14- EscMem (MemWrite)
-		15- BNE (BNE) 
-		16- IREsc (IRWrite) 
-		17- MemParaReg0 (MemtoReg0)
-		18- MemParaReg1 (MemtoReg1)
-			
-			Tabela de despacho(fetch) de acordo com o microcódigo 	
-			decode 		     (2)
-			exec   		     (6)
-			branch 		     (8)
-			jump   		 	 (9)								  
-			bne		0x05	 (10)
-			addi	0x08	 (11)
-			Jal	    0X03	 (12)
-			andi	0X0c	 (13)
-			jr		0X14	 (14)
-			jalr	0X15	 (15)
-		*/		
-			if(opcode == 0){
-				*sc = 0x48;	//Estado 6 - Se for Tipo-R    --- Estado1 -> Estado6
-			}
-			else if(opcode == 0x2B || opcode == 0x23 || opcode == 0x08){
-				*sc = 0x18;	//Estado 2 - Se for lw/sw/ addi  ---- Estado1 -> Estado2
-			}
-			else{
-				switch(opcode){
-					case 0x4:	
-						//*sc = 0xD0C;		//Estado 8 beq 	   --- Estado1 -> Estado8
-						*sc = 0x688;		//Estado 8 beq 	   --- Estado1 -> Estado8
-						break;
-
-					case 0x2:	
-						*sc = 0x900;		//Estado 9 jump(j) --- Estado1 -> Estado9
-						break;
-
-					case 0x5:	
-						*sc = 0x8248;		//Estado 10 bne    --- Estado1 -> Estado10
-						break;
-
-					case 0x08:	
-						*sc = 0x4;			//Estado 11 addi   --- Estado1 -> Estado11
-						break;
-
-					case 0x03:	
-						*sc = 0x20905;		//Estado 12 jal  --- Estado1 -> Estado12
-						break;
-
-					case 0x0C:	
-						*sc = 0xD8;			//Estado 13 andi    --- Estado1 -> Estado13
-						break;
-					
-					case 0x14:	
-						*sc = 0xB00;	    //Estado 14 jr	--- Estado1 -> Estado14
-						break;
-
-					case 0x15:	
-						*sc = 0x20B05;	    //Estado 15 jalr --- Estado1 -> Estado15
-						break;
-					
-				}
-				
-			}
-		break;
-
-		case 0x18:	//Estado2 (lw ou sw)
-			/*
-			
-			Tabela de despacho(fetch) de acordo com o microcódigo 
-
-				lw 	 0x2B 	(3)
-				sw 	 0x23 	(5)
-				addi 0x08   (11)
-				
-			*/	
-			if(opcode == 0x23) {
-				*sc = 0x3000;	//Estado2 -> Estado3 LW
-			}
-			else if(opcode == 0x2B){
-				*sc = 0x5000;	//Estado2 -> Estado5 SW
-			}else {
-				*sc = 0x4;	    //Estado2 -> Estado11 ADDI
-			}
-			break;
-
-		case 0x3000:	
-			*sc = 0x40004; 	   //Estado3 -> Estado4
-			break;
-
-		case 0x40004:	
-			*sc = 0x12020;	   //Estado4 -> Estado0
-			break;
-
-		case 0x5000:	
-			*sc = 0x12020;	   //Estado5 -> Estado0
-			break;
-
-		case 0x48:			   //Estado6 -> Estado7
-			*sc = 0x6;	
-			break;
-
-		case 0x6:	
-			*sc = 0x12020;	   //Estado7 -> Estado0
-			break;
-
-		case 0x688:		
-			*sc = 0x12020;    //Estado8 -> Estado0
-			break;
-
-		case 0x900:	 
-			*sc = 0x12020;	  //Estado9 -> Estado0
-			break;
-
-		case 0x8248:	
-			*sc = 0x12020;	 //Estado10 -> Estado0
-			break;
-
-		case 0x4:	
-			*sc = 0x12020;	////Estado11 -> Estado0
-			break;
-
-		case 0x20905:	
-			*sc = 0x12020;	//Estado12 -> Estado0
-			break;
-
-		case 0xD8:		//Estado13 addi execute -> Estado11 write back result
-			*sc = 0x4;	
-			break;
-
-		case 0xB00:		   //Estado14 -> Estado0
-			*sc = 0x12020;	
-			break;
-
-		case 0x20B05:	      //Estado15 -> Estado 0
-			*sc = 0x12020;	
-			break;
-	}
-
-	//teste
-	printf("estado: %d\n", *sc);
-
+void UnidadeControle(int IR, int *sinalControle){
+	/*variaveisd auxiliares para concatenar sinal+estado*/
+	int sinal=0,s,estadoAtual,e;
+	int proximoEstado;
+	// pega estado atual
+	takeNbits(*sinalControle, SIGNALCONTROL, CURRENTSTATE, &estadoAtual);
+	/*Funcao cm EQsLogicas implementadas*/
+	funcaoProximoEstadoExplicita(IR, sinalControle , estadoAtual, &proximoEstado);
+	takeNbits(*sinalControle,0,SIGNALCONTROL,&sinal);
+	sinal= sinal & 0x7FFFF; // 0111 1111 1111 1111 1111 ->19sinais de controle
+	e= proximoEstado; 
+	// e= e ShiftLeft 19-bits
+	e= proximoEstado << SIGNALCONTROL;
+	//	Concatenate estado +sinal de controle
+	sinal = e | sinal;
+	*sinalControle= sinal;
 }
 
-
-
-void Busca_Instrucao(int sc, int PC, int ALUOUT, int IR, int A, int B, int *PCnew, int *IRnew, int *MDRnew){
-	
+void Busca_Instrucao(int sinalControle, int PC, int ALUOUT, int IR, int A, int B, int *PCnew, int *IRnew, int *MDRnew){
+	int IRWrite=0, IorD=0;
 	char zero, overflow;
-	/*19 18 17 16 15  0
-	   0 1  0  0  0...0 												*/
-	//if((sc & 0x40000) !=0) {			 Se IRWrite == 1 'bit-18' PUZZY
-	if((sc & 0x10000) !=0) {			 //Se IRWrite == 1 'bit-16' Pelanza
-		//if((sc & 0x2000) == 0) {		 Se IorD == 0 'bit-13', a memória é acessada na posição de PC
-		if((sc & 0x1000) == 0) {		 //Se IorD == 0 'bit-12', a memória é acessada na posição de PC
-			*IRnew = memoria[PC/4];
+	takeNbits(sinalControle, 16, 1, &IRWrite);
+	takeNbits(sinalControle, 12, 1, &IorD);
+	if(IRWrite == 1) {				 	//Se IRWrite == 1 'bit-16' Pelanza
+		if(IorD == 0) {		 			//Se 	 IorD == 0 'bit-12', a memória é acessada na posição de PC
+			*IRnew = memoria[PC];
 		}
 		else{							//Se IorD == 1, a memória é acessada na posição de ALUout
-			*IRnew = memoria[ALUOUT/4];
+			*IRnew = memoria[ALUOUT];
 		}
-		*MDRnew = *IRnew << 16;			//????
+		*MDRnew = *IRnew << 16;			//extende endereco
 		*MDRnew = *MDRnew >> 16;
+		
 		ula(PC, 0x4, 0x2, PCnew, &zero, &overflow);
 	}
 }
 
-
-
-void Decodifica_BuscaRegistrador(int sc, int IR, int PC, int A, int B, int *Anew, int *Bnew, int *ALUOUTnew){
-	
+void Decodifica_BuscaRegistrador(int sinalControle, int IR, int PC, int A, int B, int *Anew, int *Bnew, int *ALUOUTnew){
+	int a,b, estado;
 	char zero, overflow;
-	/*igual */
-	if(sc==0x30) {	//Se Estado1 (decode)
-		if(IR == 0) {
+	takeNbits(sinalControle, 0, SIGNALCONTROL, &estado);
+	if(estado == 0x30) {	//Se Estado1 (decode)
+		if(IR == -1 || IR == 0) {
+			*Anew = PC-4;
+			ula(PC, 0, 0x02, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT = PC + DESVIO;
 			loop = 0;
-			printf("HALT!\n");
 			returnSignal = 1;
-			return;
+			//return;
 		}
 		else {
-			*Anew = IR >> 21;		//*Anew recebe os 5 bits referentes ao registrador RS
-			*Anew = *Anew & 0x1f;
-
-			*Bnew = IR >> 16;		//*Anew recebe os 5 bits referentes ao registrador RT
-			*Bnew = *Bnew & 0x1f;
-
+			takeNbits(IR, 21, 5, &a); //*Anew recebe os 5 bits referentes ao registrador RS
+			takeNbits(IR, 16, 5, &b); //*Bnew recebe os 5 bits referentes ao registrador RT
+			*Anew = a;
+			*Bnew = b;
 			IR = IR << 16;
 			IR = IR >> 14;
-			ula(PC, IR, 0x2, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT = PC + 4;
+			ula(PC, IR, 0x02, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT = PC + DESVIO;
 		}
 	}
 }
 
+void Execucao_CalcEnd_Desvio(int sinalControle, int A, int B, int IR, int PC, int ALUOUT, int *ALUOUTnew, int *PCnew){
 
+	char zero, overflow, ulaop;
+	int opcode, function, aluop=0;
+	int adress, PCWriteCond, BNE, sinal;			/* Valor IMEDIATO 16-bits int adress = IR << 16;*/
+	//endereco
+	takeNbits(IR, 0, 16, &adress); 			// adress <= IR[0...15]
+	//sinais
+	takeNbits(sinalControle, 6, 2, &aluop); 			// 06- UALOp0 (ALUOp0) + 07- UALOp1 (ALUOp1) = 2 bits
+	takeNbits(sinalControle, 10, 1, &PCWriteCond); 	// 10- PCEscCond (PCWriteCond) = 1 bit
+	takeNbits(sinalControle,0,SIGNALCONTROL,&sinal);	// 0-18 => os 19 sinais
+	ulaop = (char) aluop;
 
-void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT, int *ALUOUTnew, int *PCnew){
-
-	char zero, overflow;
-	int op;
-	/* Valor IMEDIATO 16-bits*/
-	int VI = IR << 16;
-	VI = VI >> 16;
-	 
 	if(returnSignal == 1) {
 		return;
 	}
-
-	//if(sc == 0x88){		//Se for tipo-r pegando campo funcao 0x3f = 0011 1111
-	if(sc == 0x48){		//Se for tipo-r pegando campo funcao 0x3f = 0011 1111
-		/*6 bits campo funcao*/
-		op = (IR & 0x3f);
-		switch(op) {
+	if(sinal == 0x48){
+		takeNbits(IR, 0, 6, &function);		/*6 bits campo funcao*/
+		switch(function) {
 			case 0x20:	//add
 				ula(reg[A], reg[B], 0x2, ALUOUTnew, &zero, &overflow);
 				break;
@@ -422,111 +387,230 @@ void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT, i
 				break;
 		}
 	}
-	/*Estado 3 Tipo-I LW/SW */
-	else if(sc == 0x18) {	/*Pelanza-lw/sw*/
-		ula(reg[A], VI, 0x2, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT
-	}				   //add
-	/*
-	else if(sc == 0xCF4) {	//BLTZ
-		ula(reg[A], 0, 0x7, ALUOUTnew, &zero, &overflow);
-		
-		if(*ALUOUTnew == 1) {
-			*PCnew = ALUOUT;
+	/*Estado-2 Tipo-I 6 instrucoes LW/SW */
+	else if(sinal == 0x28){
+	//else if(sinalControle == 0x28) {	/*Pelanza-lw/sw*/
+		//ula(reg[A], adress, 0x2, ALUOUTnew, &zero, &overflow);	//Atualiza o valor de ALUOUT
+		takeNbits(IR, 26, 6, &opcode);/*6 opcode*/
+		switch(opcode) {
+			case 0x08:	//addI
+					//printf("ADDI IMEDIATO = %d ALUSrcA = %d \n", adress, A);
+				ula(reg[A], adress, 0x02, ALUOUTnew, &zero, &overflow);
+				break;
+
+			case 0x0C:	//andi
+					//printf("ANDI IMEDIATO = %d ALUSrcA = %d \n", adress, A );
+				ula(reg[A], adress, 0x00, ALUOUTnew, &zero, &overflow);
+				break;
+
+			case 0x14: //jr Pelanza-JR jr rs
+				*ALUOUTnew = PC;
+				*PCnew = reg[A];
+				break;
+
+			case 0x15:	//jalr rs, rt => $ra = pc and goto rs;
+				// passar reg
+				//reg[B] = PC;
+				//printf("*********Goto JALR = %d e REG: %d o PC= %d\n",reg[A]*4,B, PC);
+				// RS = PC;
+				*ALUOUTnew = PC;
+				*PCnew = reg[A];
+				break;
+
+			case 0x23:	//LW
+				//printf("LOADWORD A:%d Reg[A]: %d e Imediato: %d\n", A, reg[A], adress);
+				ula(reg[A], adress, 0x02, ALUOUTnew, &zero, &overflow);
+				break;
+
+			case 0x2b:	//sw
+			//	printf("STOREWORD A:%d Reg[A]: %d e Imediato: %d\n", A, reg[A], adress);
+				ula(reg[A], adress, 0x02, ALUOUTnew, &zero, &overflow);
+				break;
+		}
+	}   
+	else if(sinal == 0x8548){        
+	//else if (sinalControle == 0x8548){
+		takeNbits(sinalControle, 15, 1, &BNE); 		// 15-(BNE) = 1 bit
+		ula(reg[A], reg[B], 0x06, ALUOUTnew, &zero, &overflow);
+		if (BNE){
+			if(zero == FALSE) {
+				*PCnew = ALUOUT;
+			}
 		}
 	}
-	*/
-	//else if(sc == 0xD0C) } puzzy-BEQ
-	else if(sc == 0x688) {	/*Pelanza-BEQ aluOp=6 sub*/
-		ula(reg[A], reg[B], 0x6, ALUOUTnew, &zero, &overflow);	
-		if(zero == 1) {
-			*PCnew = ALUOUT;
-		}
-	}
-	/*else if(sc == 0xD08) {	puzzy-BNE*/	
-	else if(sc == 0x8248) { /*Pelanza-BNE*/
+	else if(sinal == 0x548){
+	//else if(sinalControle == 0x548) {	//BEQ
 		ula(reg[A], reg[B], 0x6, ALUOUTnew, &zero, &overflow);
-		if(zero == 0) {
+		
+		if(zero == TRUE) {
 			*PCnew = ALUOUT;
 		}
 	}
-	/*else if(sc == 0x1A00) {	puzzy-j*/
-	else if(sc == 0x900) {	/*Pelanza-J*/
-		VI = IR&0x3ffffff;	//realiza a extensão de sinal
-		VI = VI << 2;
-		*PCnew = VI;
+	else if(sinal == 0xA00){
+	//else if(sinalControle == 0xA00) {			/*Pelanza-J*/
+		adress = IR&0x3ffffff;	//realiza a extensão de sinal
+		adress = adress << 2; 	// 30 bits
+		*PCnew = adress;
 	} 
-	/* trocar por addi
-	else if(sc == 88) {		//ori
-		ula(reg[A], VI, 0x1, ALUOUTnew, &zero, &overflow);
-	}
-	*/
-	else if(sc == 0x4) {	/*Pelanza-Addi rs rt imediate AluOp=02*/
-		ula(reg[A], VI, 0x2, ALUOUTnew, &zero, &overflow);
-	}
-	else if(sc == 0xD8) {	/* Pelanza-Andi rs rt imediatte AluOp=00*/
-		ula(reg[A], VI, 0x0, ALUOUTnew, &zero, &overflow);
-	}
-	
-	else if(sc == 0x20905) {		/* Pelanza-JAL imediatte AluOp=00*/
-		VI = IR&0x3ffffff;	//realiza a extensão de sinal
-		VI = VI << 2;
-		*PCnew = VI;
-		reg[31] = PC;
-	}
-
-	else if(sc == 0xB00) {	/* Pelanza-JR rs */
-		*PCnew = reg[A];
-	}
-
-	else if(sc == 0x20B05) {	/* Pelanza-JALR rs rd */
-		reg[B] = IR << 16;
-		*PCnew = reg[A];
-	}
-	
+	else if(sinal == 0x40A06){
+	//else if(sinalControle == 0x40A06) {		/* Pelanza-JAL imediatte AluOp=00*/
+		adress = IR&0x3ffffff;	//realiza a extensão de sinal
+		adress = adress << 2; 	// 30 bits
+		//printf("ADRESS calculado %d\n",adress );
+		//printf("*********Goto JAL = %d e REG: 31 = (PC = %d)\n",adress, PC);
+		*PCnew = adress;
+	}	
 }
 
-
-
-void EscreveTipoR_AcessaMemoria(int sc, int B, int IR, int ALUOUT, int PC, int *MDRnew, int *IRnew){
-	int RD;
+void EscreveTipoR_AcessaMemoria(int sinalControle, int B, int IR, int ALUOUT, int PC, int *MDRnew, int *IRnew){
+	int RD,RT, opcode, sinal;
 	if(returnSignal==1) {
 		return;
 	}
-	//if(sc == 3) {	//7
-	if(sc == 6) {	//7
-		if(IR >> 27 == 0) {	//Tipo-R
-			RD = IR >> 11;
-			RD = RD&0x1f;
+	if(sinal == 0x5){
+	//if(sinalControle == 0x5) {	//estado 7
+		takeNbits(IR, 26, 6, &opcode);
+		//if(IR >> 27 == 0) {	Tipo-R
+		if(opcode == 0) {		//Tipo-R
+			takeNbits(IR, 11, 5, &RD);
 			reg[RD] = ALUOUT;
 		}
 		else{	//Tipo-I
+			//reg[B] = ALUOUT;
 			reg[B] = ALUOUT;
 		}
-		printf("\t\tresultado da ula: %d\n", ALUOUT);
+		//printf("\t\tresultado da ula: %d\n", ALUOUT);
 	}
-	else if(sc == 0x3000) {	//se LW
+	else if(sinal == 0x30000){
+	//else if(sinalControle == 0x30000) {	//se LW
 		(*MDRnew) = (memoria[ALUOUT/4]) << 16;	//LW
 		(*MDRnew) = (*MDRnew) >> 16;	//LW
-		printf("----------ALUOUT: %d\n", ALUOUT);
-		printf("MDRnew: %d\n", *MDRnew);
+		//printf("----------ALUOUT: %d\n", ALUOUT);
+		//printf("MDRnew: %d\n", *MDRnew);
 	}
-	else if(sc == 0x5000) {	//5 se SW
-		memoria[ALUOUT/4] = reg[B];	//SW
+	else if(sinal == 0x5000){
+	//else if(sinalControle == 0x5000) {	        //estado 5 se SW
+		memoria[ALUOUT] = reg[B];	//SW
 	}
 }
 
-
-
-void EscreveRefMem(int sc, int IR, int MDR, int ALUOUT){
+void EscreveRefMem(int sinalControle, int PC, int IR, int MDR, int ALUOUT){
 	if(returnSignal == 1) {
 		return;
 	}
-	int B = IR >> 16;		//*Anew recebe os 5 bits referentes ao registrador RT
-	B = B & 0x1f;
-	if(sc == 0x40004) { //estado 4
-		reg[B] = MDR;
+	int RT,RD, RegWrite=0, RegDest=00, MemtoReg=00;  		        
+	takeNbits( sinalControle, 2, 1, &RegWrite); 		// 02-EscReg (RegWrite) = 1 bit
+	//printf("RegWrite => %d\n", RegWrite);
+	if(RegWrite) { 							/*estados 4,7,11,12,14 */  
+		takeNbits( sinalControle, 0, 2, &RegDest);		/* 00-(RegDst0) : 01-(RegDst1) = 2 bits*/
+		takeNbits( sinalControle,17, 2, &MemtoReg);		/* 00-(MemtoReg0) : 01-(MemtoReg1) = 2 bits*/
+		switch (RegDest) {					//mux RegDest
+			case 00:
+				takeNbits( IR, 16, 5,&RT); 	// RT <= IR[16...20]; B
+				
+				//printf("00 RegDst: RT = %d MDR: %d\n",RT, MDR);
+				//printf("MemtoReg = %d\n", MemtoReg);
+				
+				if (MemtoReg == 00) {		//RT = ALUOUT
+					//printf("00 RegDst: RT = %d ALUOUT: %d\n",RT, ALUOUT);
+					reg[RT] = ALUOUT;
+				}else if (MemtoReg == 01){	//RT = MDR
+					reg[RT] = MDR/4;
+				}else if (MemtoReg == 02){	//RT = PC
+					reg[RT] = PC;	
+				}
+			break;
+
+			case 01:
+				takeNbits( IR, 11, 5,&RD); 	// RD <= IR[11...15]; D
+				//printf("01 RegDst RD = %d\n", RD);
+				//reg[RD] = MDR/4;
+				if (MemtoReg == 00) {		//RD = ALUOUT
+					//printf("RD %d ALUOUT %d\n", RD, ALUOUT);
+					reg[RD] = ALUOUT;
+				}else if (MemtoReg == 01){	//RD = MDR
+					reg[RD] = MDR/4;
+				}else if (MemtoReg == 02){	//RD = PC
+					reg[RD] = PC;	
+				}
+			break;
+			
+			case 02:
+				//printf("10 Regdst $RA = %d\n",$ra);
+				$ra = MDR/4;				   	//reg[31] = MDR; RA
+				if (MemtoReg == 00) {		//RT = ALUOUT
+					$ra = ALUOUT;
+				}else if (MemtoReg == 01){	//RT = MDR
+					$ra = MDR/4;
+				}else if (MemtoReg == 02){	//RT = PC
+					$ra = PC;	
+				}
+			
+			break;
+		}
 	}
 }
 
 
+int main (int argc, char *argv[])
+{
+	int PCnew = 0, IRnew, MDRnew, Anew, Bnew, ALUOUTnew;
+	int PC = 0, IR=-1, MDR, A, B, ALUOUT;
+	int sinalControle = 0;	   	// Sinais de Controle estado ZERO
+					//                    cada bit determina um dos sinais de controle que saem da UC.
+					// A posicao de cada sinal dentro do int esta especificada no enunciado
+	char l,ula_op = 0;   			// Sinais de Controle de entrada para a ULA
+					//                    sao usados apenas os 4 bits menos significativos dos 8 disponiveis.
+	int nr_ciclos = 0; 			// contador do numero de ciclos executados
+	
+	/*LENDO ARQUIVO DE ENTRADA (CONTEUDO da MEMORIA)*/
+	int i=0,conteudo=0;
+	while(scanf("%d",&conteudo) !=EOF){
+		memoria[i] = conteudo;
+		i= i+4;
+	}
+
+	while(loop){
+		// aqui comeca um novo ciclo
+		// abaixo estao as unidades funcionais que executarao em todos os ciclos
+		// os sinais de controle em sinalControle impedirao/permitirao que a execucao seja, de fato, efetivada
+		UnidadeControle(IR, &sinalControle);
+		Busca_Instrucao(sinalControle, PC, ALUOUT, IR, A, B, &PCnew, &IRnew, &MDRnew);
+		Decodifica_BuscaRegistrador(sinalControle, IR, PC, A, B, &Anew, &Bnew, &ALUOUTnew);
+		Execucao_CalcEnd_Desvio(sinalControle, A, B, IR, PC, ALUOUT, &ALUOUTnew, &PCnew);
+		EscreveTipoR_AcessaMemoria(sinalControle, B, IR, ALUOUT, PC, &MDRnew, &IRnew);
+		EscreveRefMem(sinalControle, PC, IR, MDR, ALUOUT);
+		// contador que determina quantos ciclos foram executados
+		nr_ciclos++;
+		// atualizando os registradores temporarios necessarios ao proximo ciclo.
+		PC	 	= PCnew;
+		IR		= IRnew;
+		MDR		= (MDRnew);
+		A		= Anew;
+		B		= Bnew;
+		ALUOUT 	= ALUOUTnew;
+	} // fim do while(loop)
+
+	// impressao da memoria para verificar se a implementacao esta correta
+
+		int ii;
+		printf("PC=%d   IR=%d   MDR=%d\n",PC,IR,MDR);
+		printf("A=%d   B=%d   ALUOUT=%d\n",A,B,ALUOUT);
+		printf("CONTROLE=%d\n",sinalControle);
+
+		printf("BANCO REGISTRADORES\n");
+		for ( ii = 0; ii < NUMREG; ii++)
+		{
+			printf("R%d=%d\t", ii,reg[ii]);
+			if ((ii % 8) == 0)printf("\n");
+		}
+		printf("\n\nMEMORIA\n \n");
+		for (ii = 0; ii < 256 ; ii+=4) {
+			printf("Memoria[%d]=%d   ", ii, memoria[ii]);
+			if ((ii % 5) == 0)printf("\t\n");
+		}
+		printf("Nr de ciclos executados =%d \n", nr_ciclos);
+	
+	exit(0);
+} 
 
