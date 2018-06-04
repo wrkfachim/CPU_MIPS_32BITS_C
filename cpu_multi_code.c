@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-//#include <math.h>
 
 #define FALSE 0
 #define TRUE  1
@@ -23,22 +22,20 @@
 #define IR31 31
 //acessar apenas um bit
 #define OneBit 1
-#define DECODE 1
+//OS 19 Bits de seinal de controle
 #define SIGNALCONTROL 19
 #define CURRENTSTATE  4
 
-int memoria[MAX];		// Memoria RAM
-int reg[NUMREG];		// Banco de Registradores
+int memoria[MAX];			// Memoria RAM
+int reg[NUMREG];			// Banco de Registradores
 
-char loop = 1; 		// variavel auxiliar que determina a parada da execucao deste programa
-char returnSignal = 0;
+char loop = 1; 				// variavel auxiliar que determina a parada da execucao deste programa
+char returnSignal =	 0;	
 
-//variavel pra testes
-char pausa;
-
-
-
-
+/* ULA segue a especifica��o dada em sala de aula.
+void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow)
+args de entrada:		int a, int b, char ula_op
+args de saida: 		int *result_ula, char *zero, char *overflow */
 void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow)
 {
 	*overflow = 0;
@@ -78,9 +75,12 @@ void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow
 
 		return;
 }
-
-void takeNbits(int var,int idx_start_bit, int n_bits ,int *result){
-/******I've w@@d + I've Cooffe = I've Great IDEIA!"*/
+/* takeNbits
+*void TakeNbit(int var,int indice_bit, int n_bits ,int *result)
+args de entrada:	int variavel_com_sinais, int indice_bit, int n_bits
+args de saida: 		int *result  */
+void takeNbits(int var,int indice_bit, int n_bits ,int *result){
+	//Pega a quantidade bit apartir do indice informado
 	int cmpbit = 0, aux=0, ii;
 	int r=1;		
 	if (n_bits >= 1 && n_bits < 32){
@@ -90,9 +90,13 @@ void takeNbits(int var,int idx_start_bit, int n_bits ,int *result){
 	}else {
 		printf("Too many bits\n");
 	}
-	aux = var >> idx_start_bit;
+	aux = var >> indice_bit;
 	*result = aux & cmpbit;
 }
+/* signalsLogicEQ
+*void signalsLogicEQ(int currentState,int *result)
+args de entrada:	int currentState
+args de saida: 		int *result  */
 void signalsLogicEQ(int currentState,int *result){
 	/*declarando os 19 sinais da Unidade de Controle*/
 	int RegDst0		=0;		// 0	Lower-Bit
@@ -212,7 +216,10 @@ void signalsLogicEQ(int currentState,int *result){
 		ALUOp1 | ALUOp0 | ALUSrcB1 | ALUSrcB0 | ALUSrcA | RegWrite | RegDst1 | RegDst0;  
 	//*result = *result & 0xFFFF;
 }
-
+/* funcaoProximoEstadoExplicita
+*void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, int *nextState)
+args de entrada:	int IR, int *controlSignal, int currentState
+args de saida: 		int *nextState  */
 void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, int *nextState){
 	//variaveis para operar bit-a-bit na equacao logica 
 	int OP1=0, OP0=0, OP2=0, OP3=0, OP4=0, OP5=0;
@@ -285,7 +292,10 @@ void funcaoProximoEstadoExplicita(int IR, int *controlSignal, int currentState, 
 	*nextState = currentState;
 	*controlSignal = sinal;
 }
-
+/* UC principal
+void UnidadeControle(int IR, int *sc);
+args de entrada:		 int IR
+args de saida: 		int *sc     */
 void UnidadeControle(int IR, int *sinalControle){
 	/*variaveisd auxiliares para concatenar sinal+estado*/
 	int sinal=0,s,estadoAtual,e;
@@ -303,7 +313,10 @@ void UnidadeControle(int IR, int *sinalControle){
 	sinal = e | sinal;
 	*sinalControle= sinal;
 }
-
+/* Busca da Instrucao
+void Busca_Instrucao(int sc, int PC, int ALUOUT, int IR, int A, int B, int *PCnew, int *IRnew, int *MDRnew);
+args de entrada:		int sc, int PC, int ALUOUT, int IR, int A, int B
+args de saida: 		int *PCnew, int *IRnew, int *MDRnew     */
 void Busca_Instrucao(int sinalControle, int PC, int ALUOUT, int IR, int A, int B, int *PCnew, int *IRnew, int *MDRnew){
 	int IRWrite=0, IorD=0;
 	char zero, overflow;
@@ -322,7 +335,10 @@ void Busca_Instrucao(int sinalControle, int PC, int ALUOUT, int IR, int A, int B
 		ula(PC, 0x4, 0x2, PCnew, &zero, &overflow);
 	}
 }
-
+/* Decodifica Instrucao, Busca Registradores e Calcula Endereco para beq
+void Decodifica_BuscaRegistrador(int sc, int IR, int PC, int A, int B, int *Anew, int *Bnew, int *ALUOUTnew);
+args de entrada:		int sc, int IR, int PC, int A, int B,
+args de saida: 		int *Anew, int *Bnew, int *ALUOUTnew     */
 void Decodifica_BuscaRegistrador(int sinalControle, int IR, int PC, int A, int B, int *Anew, int *Bnew, int *ALUOUTnew){
 	int a,b, estado;
 	char zero, overflow;
@@ -346,7 +362,10 @@ void Decodifica_BuscaRegistrador(int sinalControle, int IR, int PC, int A, int B
 		}
 	}
 }
-
+/*Executa TipoR, Calcula endereco para lw/sw e efetiva desvio condicional e incondicional
+void Execucao_CalcEnd_Desvio(int sc, int A, int B, int IR, int PC, int ALUOUT, int *ALUOUTnew, int *PCnew);
+args de entrada:		int sc, int A, int B, int IR, int PC, int ALUOUT
+args de saida: 		 int *ALUOUTnew, int *PCnew */
 void Execucao_CalcEnd_Desvio(int sinalControle, int A, int B, int IR, int PC, int ALUOUT, int *ALUOUTnew, int *PCnew){
 
 	char zero, overflow, ulaop;
@@ -461,39 +480,38 @@ void Execucao_CalcEnd_Desvio(int sinalControle, int A, int B, int IR, int PC, in
 		*PCnew = adress;
 	}	
 }
-
+/* Escreve no Bco de Regs resultado TiporR, Le memoria em lw e escreve na memoria em sw
+void EscreveTipoR_AcessaMemoria(int sc, int B, int IR, int ALUOUT, int PC, int *MDRnew, int *IRnew);
+args de entrada:	 int sc, int B, int IR, int ALUOUT, int PC
+args de saida: 	 int *MDRnew, int *IRnew */
 void EscreveTipoR_AcessaMemoria(int sinalControle, int B, int IR, int ALUOUT, int PC, int *MDRnew, int *IRnew){
 	int RD,RT, opcode, sinal;
 	if(returnSignal==1) {
 		return;
 	}
+	takeNbits(sinalControle, 0, SIGNALCONTROL, &sinal);	// 0-18 => os 19 sinais
 	if(sinal == 0x5){
-	//if(sinalControle == 0x5) {	//estado 7
 		takeNbits(IR, 26, 6, &opcode);
-		//if(IR >> 27 == 0) {	Tipo-R
 		if(opcode == 0) {		//Tipo-R
 			takeNbits(IR, 11, 5, &RD);
 			reg[RD] = ALUOUT;
 		}
-		else{	//Tipo-I
-			//reg[B] = ALUOUT;
+		else{					//Tipo-I
 			reg[B] = ALUOUT;
 		}
-		//printf("\t\tresultado da ula: %d\n", ALUOUT);
 	}
 	else if(sinal == 0x30000){
-	//else if(sinalControle == 0x30000) {	//se LW
 		(*MDRnew) = (memoria[ALUOUT/4]) << 16;	//LW
-		(*MDRnew) = (*MDRnew) >> 16;	//LW
-		//printf("----------ALUOUT: %d\n", ALUOUT);
-		//printf("MDRnew: %d\n", *MDRnew);
+		(*MDRnew) = (*MDRnew) >> 16;			//LW
 	}
 	else if(sinal == 0x5000){
-	//else if(sinalControle == 0x5000) {	        //estado 5 se SW
-		memoria[ALUOUT] = reg[B];	//SW
+		memoria[ALUOUT] = reg[B];				//SW
 	}
 }
-
+/* Escreve no Bco de Regs o resultado da leitura da memoria feita por lw
+void EscreveRefMem(sort int sc, int IR, int MDR, int ALUOUT);
+args de entrada:		int sc, int IR, int MDR, int ALUOUT
+args de saida: 		nao ha */
 void EscreveRefMem(int sinalControle, int PC, int IR, int MDR, int ALUOUT){
 	if(returnSignal == 1) {
 		return;
@@ -551,18 +569,14 @@ void EscreveRefMem(int sinalControle, int PC, int IR, int MDR, int ALUOUT){
 	}
 }
 
-
-int main (int argc, char *argv[])
-{
+int main (int argc, char *argv[]){
 	int PCnew = 0, IRnew, MDRnew, Anew, Bnew, ALUOUTnew;
 	int PC = 0, IR=-1, MDR, A, B, ALUOUT;
-	int sinalControle = 0;	   	// Sinais de Controle estado ZERO
+	int sinalControle = 0;	   			// Sinais de Controle estado ZERO
 					//                    cada bit determina um dos sinais de controle que saem da UC.
 					// A posicao de cada sinal dentro do int esta especificada no enunciado
 	char l,ula_op = 0;   			// Sinais de Controle de entrada para a ULA
 					//                    sao usados apenas os 4 bits menos significativos dos 8 disponiveis.
-	int nr_ciclos = 0; 			// contador do numero de ciclos executados
-	
 	/*LENDO ARQUIVO DE ENTRADA (CONTEUDO da MEMORIA)*/
 	int i=0,conteudo=0;
 	while(scanf("%d",&conteudo) !=EOF){
@@ -581,7 +595,6 @@ int main (int argc, char *argv[])
 		EscreveTipoR_AcessaMemoria(sinalControle, B, IR, ALUOUT, PC, &MDRnew, &IRnew);
 		EscreveRefMem(sinalControle, PC, IR, MDR, ALUOUT);
 		// contador que determina quantos ciclos foram executados
-		nr_ciclos++;
 		// atualizando os registradores temporarios necessarios ao proximo ciclo.
 		PC	 	= PCnew;
 		IR		= IRnew;
@@ -594,23 +607,28 @@ int main (int argc, char *argv[])
 	// impressao da memoria para verificar se a implementacao esta correta
 
 		int ii;
-		printf("PC=%d   IR=%d   MDR=%d\n",PC,IR,MDR);
-		printf("A=%d   B=%d   ALUOUT=%d\n",A,B,ALUOUT);
-		printf("CONTROLE=%d\n",sinalControle);
+		printf("TODOS OS SINAIS EM DECIMAL\n");
+		printf("PC=%d   \tIR=%d   \tMDR=%d\n",PC,IR,MDR);
+		printf("A=%d    \tB=%d      \tALUOUT=%d\n",A,B,ALUOUT);
+		printf("Controle= %d\n",sinalControle);
 
-		printf("BANCO REGISTRADORES\n");
-		for ( ii = 0; ii < NUMREG; ii++)
+		printf("\nBANCO REGISTRADORES\n");
+		for ( ii = 0; ii < 8; ii++)
 		{
-			printf("R%d=%d\t", ii,reg[ii]);
-			if ((ii % 8) == 0)printf("\n");
+			printf("R%d=%d      \t", ii+0,reg[ii]);
+			printf("R%d=%d       \t", ii+8,reg[ii+8]);
+			printf("R%d=%d       \t", ii+16,reg[ii+16]);
+			printf("R%d=%d ", ii+24,reg[ii+24]);
+			printf("\n");
 		}
-		printf("\n\nMEMORIA\n \n");
-		for (ii = 0; ii < 256 ; ii+=4) {
-			printf("Memoria[%d]=%d   ", ii, memoria[ii]);
-			if ((ii % 5) == 0)printf("\t\n");
+		printf("\n\nMEMORIA\n");
+		for (ii = 0; ii < 31 ; ii+=4) {
+			printf("Memoria[%d]=%d       \t", ii,    memoria[ii]);
+			printf("Memoria[%d]=%d      \t", ii+32, memoria[ii+32]);
+			printf("Memoria[%d]=%d       \t", ii+64, memoria[ii+64]);
+			printf("Memoria[%d]=%d     \t", ii+96, memoria[ii+96]);
+			printf("\n");
 		}
-		printf("Nr de ciclos executados =%d \n", nr_ciclos);
-	
 	exit(0);
 } 
 
