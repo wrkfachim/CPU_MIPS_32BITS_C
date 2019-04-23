@@ -32,7 +32,7 @@ int reg[NUMREG];			// Banco de Registradores
 char loop = 1; 				// variavel auxiliar que determina a parada da execucao deste programa
 char returnSignal =	 0;	
 
-/* ULA segue a especifica��o dada em sala de aula.
+/*
 void ula (int a, int b, char ula_op, int *result_ula, char *zero, char *overflow)
 args de entrada:		int a, int b, char ula_op
 args de saida: 		int *result_ula, char *zero, char *overflow */
